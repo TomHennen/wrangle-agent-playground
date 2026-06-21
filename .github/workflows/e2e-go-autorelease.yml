@@ -1,0 +1,25 @@
+name: e2e-go-autorelease
+
+# Validates wrangle #557 (auto-create-release): wrangle's verify job
+# creates the GitHub Release for the tag when none pre-exists, then
+# attaches the attested assets. NOTE: deliberately has NO create-release
+# job — wrangle must create the release itself.
+on:
+  push:
+    tags: ["v0.0.1-e2e.autorel*"]
+  workflow_dispatch:
+
+jobs:
+  build-go:
+    permissions:
+      actions: read
+      security-events: write
+      contents: write
+      id-token: write
+      attestations: write
+    uses: TomHennen/wrangle/.github/workflows/build_and_publish_go.yml@6de92ca80561e34c8af59bd2e83997a2b03b2b7c
+    with:
+      path: go
+      release-events: non-pull-request
+      scan-tools: ""
+      policy: policies/wrangle-provenance-go-v1.hjson
