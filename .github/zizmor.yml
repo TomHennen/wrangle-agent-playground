@@ -1,0 +1,7 @@
+# The e2e workflow's reusable-workflow ref is intentionally a mutable
+# @main / @<pr-branch> ref, not a SHA: re-pointing that one line at a
+# wrangle PR branch is the whole purpose of this scaffold.
+rules:
+  unpinned-uses:
+    ignore:
+      - e2e.yml

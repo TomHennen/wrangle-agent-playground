@@ -14,6 +14,8 @@ configured.
 
 - `python/` — a trivial buildable package (`add()`) plus one pytest test.
 - `.github/workflows/e2e.yml` — calls wrangle's reusable Python workflow.
+- `.github/zizmor.yml` — ignores `unpinned-uses` for `e2e.yml`, since the
+  mutable `@main` / `@<pr-branch>` ref is this scaffold's whole point.
 
 ## E2e-testing a pending wrangle PR
 
