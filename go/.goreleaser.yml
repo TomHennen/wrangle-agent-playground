@@ -1,0 +1,32 @@
+# Goreleaser config for the wrangle-agent-playground go consumer.
+# Single platform (linux/amd64), single binary, tar.gz archive,
+# checksums.txt — mirrors the known-good wrangle-test go fixture.
+
+version: 2
+
+project_name: wrangle-playground-go
+
+builds:
+  - id: example
+    main: ./cmd/example
+    binary: example
+    goos: [linux]
+    goarch: [amd64]
+    flags:
+      - -trimpath
+    env:
+      - CGO_ENABLED=0
+
+archives:
+  - id: example-archive
+    formats: [tar.gz]
+    name_template: '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}'
+
+checksum:
+  name_template: 'checksums.txt'
+
+changelog:
+  disable: true
+
+release:
+  replace_existing_artifacts: true

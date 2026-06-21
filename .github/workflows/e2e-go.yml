@@ -1,0 +1,45 @@
+name: e2e-go
+
+# Minimal consumer of wrangle's reusable Go build workflow, used to
+# e2e-test pending wrangle PRs against unmerged code. Mirrors the
+# #558 example gh_workflow_examples/build_go.yml: a tag-gated
+# create-release job (the ADOPTER creating the release) that the
+# build_and_publish call needs:, then wrangle uploads only the
+# attested set to that pre-existing release.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  # The adopter creates the GitHub Release wrangle's verify job
+  # attaches assets to. wrangle never creates releases.
+  create-release:
+    if: ${{ startsWith(github.ref, 'refs/tags/') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # gh release create
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1 ||
+            gh release create "$TAG" --repo "$REPO" --title "$TAG" --generate-notes
+
+  build-go:
+    needs: [create-release]
+    if: ${{ always() && (needs.create-release.result == 'success' || needs.create-release.result == 'skipped') }}
+    permissions:
+      actions: read           # source scan: Scorecard reads the Actions API
+      security-events: write  # source-scan SARIF -> Security tab
+      contents: write         # wrangle verify job attaches the attested set to the pre-existing release
+      id-token: write         # keyless signing (ambient GitHub OIDC)
+      attestations: write     # wrangle attest job (actions/attest-build-provenance)
+    uses: TomHennen/wrangle/.github/workflows/build_and_publish_go.yml@go-wrangle-owns-publish
+    with:
+      path: go
+      release-events: non-pull-request
+      scan-tools: zizmor
+      policy: policies/wrangle-provenance-go-v1.hjson

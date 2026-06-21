@@ -5,3 +5,4 @@ rules:
   unpinned-uses:
     ignore:
       - e2e.yml
+      - e2e-go.yml
