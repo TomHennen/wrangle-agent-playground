@@ -1,0 +1,12 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "wrangle-playground-fixture"
+version = "0.0.1"
+description = "Disposable fixture for e2e-testing wrangle build PRs"
+requires-python = ">=3.12"
+
+[project.optional-dependencies]
+test = ["pytest"]
