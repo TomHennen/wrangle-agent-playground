@@ -19,5 +19,5 @@ jobs:
     with:
       path: python
       release-events: non-pull-request
-      scan-tools: osv,zizmor,wrangle-lint
-      policy: policies/wrangle-default-python-v1.hjson
+      scan-tools: zizmor
+      policy: policies/wrangle-provenance-python-v1.hjson
