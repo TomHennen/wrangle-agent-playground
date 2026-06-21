@@ -15,9 +15,9 @@ jobs:
       contents: write         # wrangle verify job attaches the signed VSA on tag pushes; GitHub validates called-job permissions at startup, so grant it on every run
       id-token: write         # keyless signing (ambient GitHub OIDC)
       attestations: write     # wrangle attest job (actions/attest-build-provenance)
-    uses: TomHennen/wrangle/.github/workflows/build_and_publish_python.yml@main
+    uses: TomHennen/wrangle/.github/workflows/build_and_publish_python.yml@attest-sign-metadata-pr1
     with:
       path: python
       release-events: non-pull-request
-      scan-tools: zizmor
-      policy: policies/wrangle-provenance-python-v1.hjson
+      scan-tools: osv,zizmor,wrangle-lint
+      policy: policies/wrangle-default-python-v1.hjson
