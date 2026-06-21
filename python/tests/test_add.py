@@ -1,6 +1,6 @@
 import pytest
 
-from playground_fixture import add
+from wrangle_playground_fixture import add
 
 
 def test_add_sums_values():
