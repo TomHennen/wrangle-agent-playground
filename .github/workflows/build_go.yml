@@ -20,3 +20,4 @@ jobs:
     with:
       path: "."
       scan-tools: ""
+      policy: policies/wrangle-provenance-go-v1.hjson
