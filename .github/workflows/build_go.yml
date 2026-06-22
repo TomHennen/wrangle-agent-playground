@@ -19,5 +19,4 @@ jobs:
     uses: TomHennen/wrangle/.github/workflows/build_and_publish_go.yml@v0.3.0
     with:
       path: "."
-      scan-tools: ""
-      policy: policies/wrangle-provenance-go-v1.hjson
+      scan-tools: "osv zizmor wrangle-lint"
