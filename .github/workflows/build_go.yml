@@ -16,7 +16,7 @@ jobs:
       contents: write
       id-token: write
       attestations: write
-    uses: TomHennen/wrangle/.github/workflows/build_and_publish_go.yml@v0.3.0
+    uses: TomHennen/wrangle/.github/workflows/build_and_publish_go.yml@v0.3.0 # zizmor: ignore[unpinned-uses] - immutable
     with:
       path: "."
       scan-tools: "osv zizmor wrangle-lint"
