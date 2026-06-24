@@ -1,0 +1,178 @@
+name: osv packaging spike (#596)
+
+# Phase-0 spike for wrangle #596: measure net per-run cost of delivering
+# osv-scanner three ways, on cold ubuntu-latest (amd64) runners.
+#   A = status quo: `go install` from wrangle's tools/go.mod (compile from source)
+#   B = prebuilt binary via wrangle's lib/download_verify.sh (no compile)
+#   C = container, built from source (build = publish-time/amortized; per-run = docker pull)
+# Each arm runs in its own job => fresh cold runner. Timings in ms via date +%s%3N.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  WRANGLE_REPO: TomHennen/wrangle
+  OSV_PKG: github.com/google/osv-scanner/v2/cmd/osv-scanner
+  OSV_VER: v2.4.0
+  OSV_URL: https://github.com/google/osv-scanner/releases/download/v2.4.0/osv-scanner_linux_amd64
+  OSV_SHA: 15314940c10d26af9c6649f150b8a47c1262e8fc7e17b1d1029b0e479e8ed8a0
+  IMAGE: ghcr.io/tomhennen/osv-spike-596
+
+jobs:
+  arm-a-goinstall:
+    runs-on: ubuntu-latest
+    outputs:
+      cold: ${{ steps.t.outputs.cold }}
+      warm: ${{ steps.t.outputs.warm }}
+      run: ${{ steps.t.outputs.run }}
+      ver: ${{ steps.t.outputs.ver }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: TomHennen/wrangle
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/go.mod
+          cache: false
+      - id: t
+        shell: bash
+        run: |
+          ms(){ date +%s%3N; }
+          # cold: empty module + build cache on a fresh runner
+          s=$(ms); ( cd tools && go install "$OSV_PKG" ); e=$(ms); cold=$(( e - s ))
+          # warm: second install hits the now-populated caches
+          s=$(ms); ( cd tools && go install "$OSV_PKG" ); e=$(ms); warm=$(( e - s ))
+          osv="$(go env GOPATH)/bin/osv-scanner"
+          ver="$("$osv" --version 2>&1 | head -1)"
+          s=$(ms); "$osv" scan source -r ./tools || true; e=$(ms); run=$(( e - s ))
+          { echo "cold=$cold"; echo "warm=$warm"; echo "run=$run"; echo "ver=$ver"; } >> "$GITHUB_OUTPUT"
+          { echo "### Arm A — go install (from source)"; echo "- cold acquire: ${cold} ms"; echo "- warm acquire: ${warm} ms"; echo "- run: ${run} ms"; echo "- $ver"; } >> "$GITHUB_STEP_SUMMARY"
+
+  arm-b-prebuilt:
+    runs-on: ubuntu-latest
+    outputs:
+      acquire: ${{ steps.t.outputs.acquire }}
+      run: ${{ steps.t.outputs.run }}
+      ver: ${{ steps.t.outputs.ver }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: TomHennen/wrangle
+          persist-credentials: false
+      - id: t
+        shell: bash
+        run: |
+          ms(){ date +%s%3N; }
+          # shellcheck source=/dev/null
+          source lib/download_verify.sh
+          s=$(ms); wrangle_download_verify "$OSV_URL" "$OSV_SHA" /tmp/osv-scanner; e=$(ms); acquire=$(( e - s ))
+          chmod +x /tmp/osv-scanner
+          ver="$(/tmp/osv-scanner --version 2>&1 | head -1)"
+          s=$(ms); /tmp/osv-scanner scan source -r ./tools || true; e=$(ms); run=$(( e - s ))
+          { echo "acquire=$acquire"; echo "run=$run"; echo "ver=$ver"; } >> "$GITHUB_OUTPUT"
+          { echo "### Arm B — prebuilt binary (download_verify)"; echo "- cold acquire (download+verify): ${acquire} ms"; echo "- run: ${run} ms"; echo "- $ver"; } >> "$GITHUB_STEP_SUMMARY"
+
+  arm-c-build:
+    runs-on: ubuntu-latest
+    outputs:
+      digest: ${{ steps.b.outputs.digest }}
+      build_ms: ${{ steps.b.outputs.build_ms }}
+      size: ${{ steps.b.outputs.size }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: TomHennen/wrangle
+          persist-credentials: false
+      - id: b
+        shell: bash
+        run: |
+          ms(){ date +%s%3N; }
+          cat > Dockerfile.spike <<'DOCKER'
+          FROM golang:1.26 AS build
+          WORKDIR /src
+          COPY tools/ ./tools/
+          RUN cd tools && CGO_ENABLED=0 go build -o /osv-scanner github.com/google/osv-scanner/v2/cmd/osv-scanner
+          FROM gcr.io/distroless/static:nonroot
+          COPY --from=build /osv-scanner /osv-scanner
+          ENTRYPOINT ["/osv-scanner"]
+          DOCKER
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          # build = publish-time cost (amortized; NOT a per-run number)
+          s=$(ms); docker build -t "$IMAGE:spike" -f Dockerfile.spike . ; e=$(ms); build_ms=$(( e - s ))
+          docker push "$IMAGE:spike"
+          digest="$(docker inspect --format='{{index .RepoDigests 0}}' "$IMAGE:spike")"
+          size="$(docker image inspect "$IMAGE:spike" --format='{{.Size}}')"
+          { echo "digest=$digest"; echo "build_ms=$build_ms"; echo "size=$size"; } >> "$GITHUB_OUTPUT"
+          { echo "### Arm C — container build (publish-time, amortized)"; echo "- build+push: ${build_ms} ms"; echo "- image size: ${size} bytes"; echo "- digest: \`${digest}\`"; } >> "$GITHUB_STEP_SUMMARY"
+
+  arm-c-pullrun:
+    needs: arm-c-build
+    runs-on: ubuntu-latest
+    outputs:
+      pull_cold: ${{ steps.t.outputs.pull_cold }}
+      pull_warm: ${{ steps.t.outputs.pull_warm }}
+      run: ${{ steps.t.outputs.run }}
+      ver: ${{ steps.t.outputs.ver }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: TomHennen/wrangle
+          persist-credentials: false
+      - id: t
+        shell: bash
+        env:
+          DIGEST: ${{ needs.arm-c-build.outputs.digest }}
+        run: |
+          ms(){ date +%s%3N; }
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          # cold pull on a fresh runner = the real per-run acquire cost for arm C
+          s=$(ms); docker pull "$DIGEST" >/dev/null; e=$(ms); pull_cold=$(( e - s ))
+          # warm pull (already local)
+          s=$(ms); docker pull "$DIGEST" >/dev/null; e=$(ms); pull_warm=$(( e - s ))
+          ver="$(docker run --rm "$DIGEST" --version 2>&1 | head -1)"
+          s=$(ms); docker run --rm -u "$(id -u):$(id -g)" -v "$PWD/tools":/src:ro "$DIGEST" scan source -r /src || true; e=$(ms); run=$(( e - s ))
+          { echo "pull_cold=$pull_cold"; echo "pull_warm=$pull_warm"; echo "run=$run"; echo "ver=$ver"; } >> "$GITHUB_OUTPUT"
+          { echo "### Arm C — pull + run (per-run cost)"; echo "- cold pull: ${pull_cold} ms"; echo "- warm pull: ${pull_warm} ms"; echo "- run: ${run} ms"; echo "- $ver"; } >> "$GITHUB_STEP_SUMMARY"
+
+  summary:
+    needs: [arm-a-goinstall, arm-b-prebuilt, arm-c-build, arm-c-pullrun]
+    runs-on: ubuntu-latest
+    steps:
+      - shell: bash
+        env:
+          A_COLD: ${{ needs.arm-a-goinstall.outputs.cold }}
+          A_WARM: ${{ needs.arm-a-goinstall.outputs.warm }}
+          A_RUN: ${{ needs.arm-a-goinstall.outputs.run }}
+          B_ACQ: ${{ needs.arm-b-prebuilt.outputs.acquire }}
+          B_RUN: ${{ needs.arm-b-prebuilt.outputs.run }}
+          C_BUILD: ${{ needs.arm-c-build.outputs.build_ms }}
+          C_SIZE: ${{ needs.arm-c-build.outputs.size }}
+          C_PULL_COLD: ${{ needs.arm-c-pullrun.outputs.pull_cold }}
+          C_PULL_WARM: ${{ needs.arm-c-pullrun.outputs.pull_warm }}
+          C_RUN: ${{ needs.arm-c-pullrun.outputs.run }}
+          A_VER: ${{ needs.arm-a-goinstall.outputs.ver }}
+          B_VER: ${{ needs.arm-b-prebuilt.outputs.ver }}
+          C_VER: ${{ needs.arm-c-pullrun.outputs.ver }}
+        run: |
+          {
+            echo "# osv packaging spike — results (#596)"
+            echo ""
+            echo "Decision-relevant number is **cold acquire** (the adopter first-run / release-path case)."
+            echo ""
+            echo "| Arm | Delivery | Cold acquire (ms) | Warm acquire (ms) | Run (ms) |"
+            echo "|-----|----------|------------------:|------------------:|---------:|"
+            echo "| A | go install (from source) | ${A_COLD} | ${A_WARM} | ${A_RUN} |"
+            echo "| B | prebuilt binary (download+verify) | ${B_ACQ} | n/a | ${B_RUN} |"
+            echo "| C | container (docker pull) | ${C_PULL_COLD} | ${C_PULL_WARM} | ${C_RUN} |"
+            echo ""
+            echo "Arm C build (publish-time, amortized, NOT per-run): ${C_BUILD} ms; image size ${C_SIZE} bytes."
+            echo ""
+            echo "Versions — A: ${A_VER} | B: ${B_VER} | C: ${C_VER}"
+            echo ""
+            echo "Reading: C beats A on cold acquire if pull << go-install-cold. B is the speed floor (no compile) but is a reference, not an adoption candidate (no go.mod manifest, no sandbox)."
+          } >> "$GITHUB_STEP_SUMMARY"
