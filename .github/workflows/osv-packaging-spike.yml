@@ -51,6 +51,7 @@ jobs:
           ver="$("$osv" --version 2>&1 | head -1)"
           s=$(ms); "$osv" scan source -r ./tools || true; e=$(ms); run=$(( e - s ))
           { echo "cold=$cold"; echo "warm=$warm"; echo "run=$run"; echo "ver=$ver"; } >> "$GITHUB_OUTPUT"
+          printf "SPIKE_A cold=%s warm=%s run=%s ver=%s\n" "$cold" "$warm" "$run" "$ver"
           { echo "### Arm A — go install (from source)"; echo "- cold acquire: ${cold} ms"; echo "- warm acquire: ${warm} ms"; echo "- run: ${run} ms"; echo "- $ver"; } >> "$GITHUB_STEP_SUMMARY"
 
   arm-b-prebuilt:
@@ -75,6 +76,7 @@ jobs:
           ver="$(/tmp/osv-scanner --version 2>&1 | head -1)"
           s=$(ms); /tmp/osv-scanner scan source -r ./tools || true; e=$(ms); run=$(( e - s ))
           { echo "acquire=$acquire"; echo "run=$run"; echo "ver=$ver"; } >> "$GITHUB_OUTPUT"
+          printf "SPIKE_B acquire=%s run=%s ver=%s\n" "$acquire" "$run" "$ver"
           { echo "### Arm B — prebuilt binary (download_verify)"; echo "- cold acquire (download+verify): ${acquire} ms"; echo "- run: ${run} ms"; echo "- $ver"; } >> "$GITHUB_STEP_SUMMARY"
 
   arm-c-build:
@@ -108,6 +110,7 @@ jobs:
           digest="$(docker inspect --format='{{index .RepoDigests 0}}' "$IMAGE:spike")"
           size="$(docker image inspect "$IMAGE:spike" --format='{{.Size}}')"
           { echo "digest=$digest"; echo "build_ms=$build_ms"; echo "size=$size"; } >> "$GITHUB_OUTPUT"
+          printf "SPIKE_C build_ms=%s size=%s digest=%s\n" "$build_ms" "$size" "$digest"
           { echo "### Arm C — container build (publish-time, amortized)"; echo "- build+push: ${build_ms} ms"; echo "- image size: ${size} bytes"; echo "- digest: \`${digest}\`"; } >> "$GITHUB_STEP_SUMMARY"
 
   arm-c-pullrun:
@@ -137,6 +140,7 @@ jobs:
           ver="$(docker run --rm "$DIGEST" --version 2>&1 | head -1)"
           s=$(ms); docker run --rm -u "$(id -u):$(id -g)" -v "$PWD/tools":/src:ro "$DIGEST" scan source -r /src || true; e=$(ms); run=$(( e - s ))
           { echo "pull_cold=$pull_cold"; echo "pull_warm=$pull_warm"; echo "run=$run"; echo "ver=$ver"; } >> "$GITHUB_OUTPUT"
+          printf "SPIKE_Cpull pull_cold=%s pull_warm=%s run=%s ver=%s\n" "$pull_cold" "$pull_warm" "$run" "$ver"
           { echo "### Arm C — pull + run (per-run cost)"; echo "- cold pull: ${pull_cold} ms"; echo "- warm pull: ${pull_warm} ms"; echo "- run: ${run} ms"; echo "- $ver"; } >> "$GITHUB_STEP_SUMMARY"
 
   summary:
