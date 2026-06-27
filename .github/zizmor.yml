@@ -1,0 +1,8 @@
+# The validation harness pins actions/scan to PR #622's head SHA, which has no
+# released version tag — zizmor's online ref-version-mismatch audit cannot
+# resolve it and flags a false positive. Suppress it for the harness workflow
+# only; every other audit (including online ones) stays active.
+rules:
+  ref-version-mismatch:
+    ignore:
+      - wrangle-validate.yml
