@@ -1,0 +1,11 @@
+# Planted findings for zizmor. workflow_dispatch only so it never auto-runs;
+# zizmor analyzes it regardless of triggers.
+name: planted-bad
+on: workflow_dispatch
+permissions: {}
+jobs:
+  bad:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: tj-actions/changed-files@v44
