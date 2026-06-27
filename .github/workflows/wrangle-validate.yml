@@ -1,0 +1,35 @@
+# Wrangle PR #622 end-to-end validation harness.
+# Pins actions/scan at PR #622 head (a6602ce65544b87c9360adc58a1dcdeb88b57521) so the run exercises #622's
+# catalog (zizmor + wrangle-lint as delivery: image), run.sh docker path, and
+# the github-token -> WRANGLE_EXTRA_GITHUB_TOKEN forwarding.
+#
+# Re-validate with one dispatch:
+#   gh workflow run wrangle-validate.yml                       # online (default)
+#   gh workflow run wrangle-validate.yml -f online=false       # offline A/B
+#   gh workflow run wrangle-validate.yml --ref wrangle-622-findings   # gating: red
+name: wrangle-validate
+on:
+  push:
+    branches: ["main", "wrangle-622-findings"]
+  workflow_dispatch:
+    inputs:
+      online:
+        description: "Forward github-token to zizmor (online audits). false = offline A/B."
+        type: boolean
+        default: true
+permissions: {}
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    steps:
+      - name: Source scan
+        uses: TomHennen/wrangle/actions/scan@a6602ce65544b87c9360adc58a1dcdeb88b57521 # PR #622 head
+        with:
+          checkout: "true"
+          tools: "osv zizmor wrangle-lint"
+          artifact-name: scan
+          github-token: ${{ (github.event_name != 'workflow_dispatch' || inputs.online) && github.token || '' }}
