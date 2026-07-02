@@ -1,0 +1,113 @@
+# Wrangle PR #674 containerized-SBOM end-to-end validation harness.
+# Pins the npm build composite at PR #674 head
+# (1ddb3982a96d3c6542c12297927c3b7e39c954c6) so the run exercises #674's
+# SBOM rewire: lib/generate_sbom.sh -> run.sh -s <src> -o <meta> syft, which
+# VSA-gates (gh attestation verify) and docker-runs the curated syft image
+# entirely in the build job under permissions: contents: read.
+name: wrangle-sbom-674
+on:
+  push:
+    branches: ["feat/674-sbom-npm-validate"]
+  workflow_dispatch: {}
+permissions: {}
+jobs:
+  npm-build-sbom:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout sample project
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Build npm package (generates SBOM via #674 containerized path)
+        id: build
+        uses: TomHennen/wrangle/build/actions/npm@1ddb3982a96d3c6542c12297927c3b7e39c954c6 # PR #674 head
+        with:
+          path: sample-npm
+          run-tests: "false"
+
+      - name: Assert real SBOM + attest manifest (new/container path)
+        shell: bash
+        env:
+          METADATA_DIR: ${{ steps.build.outputs.metadata-dir }}
+        run: |
+          set -euo pipefail
+          printf 'metadata-dir: %s\n' "$METADATA_DIR"
+          ls -la "$METADATA_DIR"
+          sbom="$METADATA_DIR/sbom.spdx.json"
+          manifest="$METADATA_DIR/wrangle_attestation_metadata.json"
+          printf 'spdxVersion: %s\n' "$(jq -r .spdxVersion "$sbom")"
+          jq -e '.spdxVersion | startswith("SPDX-")' "$sbom" >/dev/null
+          count="$(jq '.packages | length' "$sbom")"
+          printf 'new-path packages: %s\n' "$count"
+          jq -e '.packages | length > 0' "$sbom" >/dev/null
+          jq -r '.packages[].name' "$sbom"
+          jq -e '."predicate-type" == "https://spdx.dev/Document"' "$manifest" >/dev/null
+          printf 'OK manifest predicate-type=%s result-file=%s\n' \
+            "$(jq -r '."predicate-type"' "$manifest")" "$(jq -r '."result-file"' "$manifest")"
+          cp "$sbom" "$GITHUB_WORKSPACE/new.spdx.json"
+
+      # --- Old pre-#674 path: verified binary syft on the SAME source ---
+      - name: Checkout wrangle (main) for binary syft install
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: TomHennen/wrangle
+          ref: 522f048b8604e652f711f95eeb3f0e49cfa522c0
+          path: wrangle-main
+
+      - name: Install cosign (for syft signature verification)
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      - name: Install verified binary syft 1.42.4 and scan same source
+        shell: bash
+        env:
+          WRANGLE_BIN_DIR: ${{ runner.temp }}/.wrangle/bin
+        run: |
+          set -euo pipefail
+          "$GITHUB_WORKSPACE/wrangle-main/tools/syft/install.sh" 1.42.4
+          "$WRANGLE_BIN_DIR/syft" version
+          "$WRANGLE_BIN_DIR/syft" dir:sample-npm -o spdx-json > "$GITHUB_WORKSPACE/old.spdx.json"
+          printf 'old-path packages: %s\n' "$(jq '.packages | length' "$GITHUB_WORKSPACE/old.spdx.json")"
+
+      - name: Compare old (binary) vs new (container) SBOM
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE"
+          pkgset() {
+            jq -r '.packages[]
+              | ((.externalRefs // [] | map(select(.referenceType=="purl")) | .[0].referenceLocator)
+                 // (.name + "@" + (.versionInfo // "")))' "$1" | sort -u
+          }
+          pkgset old.spdx.json > old.pkgs
+          pkgset new.spdx.json > new.pkgs
+          printf 'old package-identity count: %s\n' "$(wc -l < old.pkgs)"
+          printf 'new package-identity count: %s\n' "$(wc -l < new.pkgs)"
+          printf '=== package-identity diff (old<->new) ===\n'
+          if diff -u old.pkgs new.pkgs; then
+            printf 'PACKAGE-SET VERDICT: IDENTICAL\n'
+          else
+            printf 'PACKAGE-SET VERDICT: DIFFERENT (see diff above)\n'
+          fi
+          printf '\n=== normalized full diff (strip created/namespace/name) ===\n'
+          norm() {
+            jq -S 'del(.creationInfo.created)
+              | .documentNamespace="NORMALIZED"
+              | .name="NORMALIZED"' "$1"
+          }
+          norm old.spdx.json > old.norm.json
+          norm new.spdx.json > new.norm.json
+          diff -u old.norm.json new.norm.json > norm.diff || true
+          printf 'normalized diff line count: %s\n' "$(wc -l < norm.diff)"
+          printf '--- first 60 lines of normalized diff ---\n'
+          head -60 norm.diff || true
+
+      - name: Upload SBOM artifacts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: sbom-comparison
+          path: |
+            new.spdx.json
+            old.spdx.json
+            ${{ steps.build.outputs.metadata-dir }}/wrangle_attestation_metadata.json

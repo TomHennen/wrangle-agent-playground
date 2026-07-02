@@ -1,0 +1,10 @@
+{
+  "name": "wrangle-sbom-sample",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Minimal npm package to exercise wrangle PR #674 containerized SBOM path.",
+  "license": "MIT",
+  "dependencies": {
+    "is-number": "7.0.0"
+  }
+}
