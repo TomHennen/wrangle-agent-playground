@@ -74,6 +74,29 @@ jobs:
         run: |
           set -euo pipefail
           cd "$GITHUB_WORKSPACE"
+
+          # Substantive verdict: sorted set of purls (path-independent software
+          # package identity). Excludes the SPDX root DESCRIBES pseudo-package,
+          # which has no purl and is named after the scan root (path artifact).
+          purlset() {
+            jq -r '[.packages[] | (.externalRefs // [])[]
+                    | select(.referenceType=="purl") | .referenceLocator]
+                   | unique | .[]' "$1"
+          }
+          purlset old.spdx.json > old.purls
+          purlset new.spdx.json > new.purls
+          printf 'old purl count: %s\n' "$(wc -l < old.purls)"
+          printf 'new purl count: %s\n' "$(wc -l < new.purls)"
+          printf '%s\n' '=== purl set diff (old<->new) ==='
+          if diff -u old.purls new.purls; then
+            printf '%s\n' 'PURL-SET VERDICT: IDENTICAL'
+          else
+            printf '%s\n' 'PURL-SET VERDICT: DIFFERENT (see diff above)'
+            exit 1
+          fi
+
+          # Full package-identity set (purl, else name@version) for completeness;
+          # the only expected delta is the path-named root pseudo-package.
           pkgset() {
             jq -r '.packages[]
               | ((.externalRefs // [] | map(select(.referenceType=="purl")) | .[0].referenceLocator)
@@ -81,15 +104,10 @@ jobs:
           }
           pkgset old.spdx.json > old.pkgs
           pkgset new.spdx.json > new.pkgs
-          printf 'old package-identity count: %s\n' "$(wc -l < old.pkgs)"
-          printf 'new package-identity count: %s\n' "$(wc -l < new.pkgs)"
-          printf '=== package-identity diff (old<->new) ===\n'
-          if diff -u old.pkgs new.pkgs; then
-            printf 'PACKAGE-SET VERDICT: IDENTICAL\n'
-          else
-            printf 'PACKAGE-SET VERDICT: DIFFERENT (see diff above)\n'
-          fi
-          printf '\n=== normalized full diff (strip created/namespace/name) ===\n'
+          printf '%s\n' '' '=== full package-identity diff (purl-or-name@version) ==='
+          diff -u old.pkgs new.pkgs || true
+
+          printf '%s\n' '' '=== normalized full diff (strip created/namespace/name) ==='
           norm() {
             jq -S 'del(.creationInfo.created)
               | .documentNamespace="NORMALIZED"
@@ -99,8 +117,8 @@ jobs:
           norm new.spdx.json > new.norm.json
           diff -u old.norm.json new.norm.json > norm.diff || true
           printf 'normalized diff line count: %s\n' "$(wc -l < norm.diff)"
-          printf '--- first 60 lines of normalized diff ---\n'
-          head -60 norm.diff || true
+          printf '%s\n' '--- first 80 lines of normalized diff ---'
+          head -80 norm.diff || true
 
       - name: Upload SBOM artifacts
         if: always()
