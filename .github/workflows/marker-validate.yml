@@ -1,0 +1,25 @@
+# Validates wrangle PR #678 end-to-end: a real tag release built with the
+# reusable npm workflow pinned at the #678 head must emit a VSA whose
+# verifiedLevels carry the WRANGLE_* check markers (HAS_SBOM, VULN_SCANNED,
+# WORKFLOWS_LINTED, LINTED), while the advisory WRANGLE_RELEASE_PINNED policy
+# SOFTFAILs (the pin is a branch SHA, not a wrangle release tag) without
+# blocking the release.
+#
+#   git tag marker-e2e-1 && git push origin marker-e2e-1
+name: marker-validate
+on:
+  push:
+    tags: ["marker-*"]
+permissions: {}
+jobs:
+  build:
+    permissions:
+      contents: write   # verify attaches the VSA bundle to the tag's release
+      id-token: write   # OIDC for Sigstore signing
+      attestations: write
+      actions: read
+      security-events: write
+    uses: TomHennen/wrangle/.github/workflows/build_and_publish_npm.yml@d83d20779e4b57667a4d5b021906aec5f0b21467 # PR #678 head
+    with:
+      path: sample-npm
+      release-events: tag-only
