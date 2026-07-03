@@ -1,0 +1,10 @@
+{
+  "tools": {
+    "my-sbom": {
+      "kind": "sbom",
+      "delivery": "image",
+      "image": "ghcr.io/tomhennen/wrangle-agent-playground/mysbom@sha256:3d59f60624418e8ac5d3a9f62b4a9d13913ecb44da144760318b42f27ba56553",
+      "network": "none"
+    }
+  }
+}
