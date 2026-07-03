@@ -1,0 +1,43 @@
+# Builds the BYO (non-wrangle) SBOM tool image and pushes it to this repo's
+# own GHCR namespace — deliberately OUTSIDE ghcr.io/tomhennen/wrangle/* so it
+# stands in for an adopter's own tool (wrangle PR #676 invariant b). Prints the
+# @sha256 digest to pin into .wrangle/tools.json, and makes the package public.
+name: publish-byo-sbom
+on:
+  workflow_dispatch:
+permissions: {}
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE: ghcr.io/tomhennen/wrangle-agent-playground/mysbom
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Log in to GHCR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ACTOR: ${{ github.actor }}
+        run: echo "$GH_TOKEN" | docker login ghcr.io -u "$ACTOR" --password-stdin
+      - name: Build and push
+        run: |
+          set -euo pipefail
+          docker build -t "$IMAGE:v1" byo-sbom-tool
+          docker push "$IMAGE:v1"
+          DIGEST="$(docker inspect --format '{{index .RepoDigests 0}}' "$IMAGE:v1")"
+          printf 'BYO_IMAGE_DIGEST=%s\n' "$DIGEST" >> "$GITHUB_ENV"
+          {
+            printf '## BYO SBOM image published\n\n'
+            printf '```\n%s\n```\n' "$DIGEST"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Make package public
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api -X PATCH \
+            /user/packages/container/wrangle-agent-playground%2Fmysbom/visibility \
+            -f visibility=public || \
+          printf 'note: could not auto-set visibility; set it in the package UI\n'

@@ -1,0 +1,49 @@
+# wrangle PR #676 end-to-end proof: an adopter plugs in their OWN SBOM tool via
+# an auto-discovered .wrangle/tools.json and selects it with `sbom-tool`.
+#
+# The wrangle npm build COMPOSITE is pinned DIRECTLY at the #676 head SHA
+# (mirroring wrangle-validate.yml), not via a reusable workflow.
+#
+#   Scenario 1 (headline): dispatch with sbom-tool=my-sbom -> the BYO image runs.
+#   Scenario 2 (control):  dispatch with sbom-tool=sbom    -> wrangle's syft runs,
+#                          the defined-but-unselected my-sbom never runs.
+#
+#   gh workflow run byo-sbom-validate.yml -f sbom-tool=my-sbom
+#   gh workflow run byo-sbom-validate.yml -f sbom-tool=sbom
+name: byo-sbom-validate
+on:
+  workflow_dispatch:
+    inputs:
+      sbom-tool:
+        description: "SBOM tool to select (my-sbom = BYO; sbom = wrangle's syft)"
+        type: string
+        default: my-sbom
+permissions: {}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Build (npm) with a selectable SBOM tool
+        id: build
+        uses: TomHennen/wrangle/build/actions/npm@b260dca9f5fc57e6625d8cdd2edb97c11500bab2 # PR #676 head
+        with:
+          path: sample-npm
+          run-tests: "false"
+          sbom-tool: ${{ inputs.sbom-tool }}
+
+      - name: Inspect produced SBOM (evidence)
+        env:
+          META: ${{ steps.build.outputs.metadata-dir }}
+        run: |
+          set -euo pipefail
+          SBOM="$META/sbom.spdx.json"
+          printf '::group::sbom.spdx.json (%s)\n' "$SBOM"
+          cat "$SBOM"
+          printf '\n::endgroup::\n'
+          printf 'document.name : %s\n' "$(jq -r '.name' "$SBOM")"
+          printf 'creators      : %s\n' "$(jq -rc '.creationInfo.creators' "$SBOM")"
+          printf 'packages      : %s\n' "$(jq '.packages | length' "$SBOM")"

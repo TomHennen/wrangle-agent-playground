@@ -1,0 +1,9 @@
+{
+  "name": "byo-sbom-sample",
+  "version": "1.0.0",
+  "description": "Minimal npm project proving wrangle PR #676 BYO SBOM path",
+  "license": "MIT",
+  "dependencies": {
+    "left-pad": "1.3.0"
+  }
+}
