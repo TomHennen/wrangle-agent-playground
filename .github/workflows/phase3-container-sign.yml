@@ -1,9 +1,8 @@
 name: phase3-container-sign
 
 # Playground validation for wrangle PR #703 (Phase 3 containerized signing).
-# Pins wrangle DIRECTLY at the PR head SHA and runs the build+attest reusable
-# workflows with in-container keyless signing on (verify-in-container: true),
-# plus a break-glass in-job job (false) for identity comparison.
+# Pins wrangle DIRECTLY at the PR head SHA. Signing is unconditional (activated
+# by the catalog token: sigstore grant alone) — no verify-in-container input.
 
 on:
   workflow_dispatch:
@@ -11,31 +10,17 @@ on:
 permissions: {}
 
 jobs:
-  in-container:
+  python:
     permissions:
       actions: read
       security-events: write
       contents: write
       id-token: write
       attestations: write
-    uses: TomHennen/wrangle/.github/workflows/build_and_publish_python.yml@6bbf2d73b11d81696336196398721db9f88b0a51 # zizmor: ignore[unpinned-uses] PR #703 head under test
+    uses: TomHennen/wrangle/.github/workflows/build_and_publish_python.yml@da25da89aa51066c29ddfaea9892cd5123d5a8e4 # zizmor: ignore[unpinned-uses] PR #703 head under test
     with:
       path: python-pip
       release-events: non-pull-request
-      verify-in-container: true
-
-  in-job:
-    permissions:
-      actions: read
-      security-events: write
-      contents: write
-      id-token: write
-      attestations: write
-    uses: TomHennen/wrangle/.github/workflows/build_and_publish_python.yml@6bbf2d73b11d81696336196398721db9f88b0a51 # zizmor: ignore[unpinned-uses] PR #703 head under test
-    with:
-      path: python-pip
-      release-events: non-pull-request
-      verify-in-container: false
 
   container:
     permissions:
@@ -45,12 +30,11 @@ jobs:
       packages: write
       id-token: write
       attestations: write
-    uses: TomHennen/wrangle/.github/workflows/build_and_publish_container.yml@6bbf2d73b11d81696336196398721db9f88b0a51 # zizmor: ignore[unpinned-uses] PR #703 head under test
+    uses: TomHennen/wrangle/.github/workflows/build_and_publish_container.yml@da25da89aa51066c29ddfaea9892cd5123d5a8e4 # zizmor: ignore[unpinned-uses] PR #703 head under test
     with:
       path: container
       imagename: ghcr.io/tomhennen/wrangle-agent-playground/phase3-sign
       registry: ghcr.io
       release-events: non-pull-request
-      verify-in-container: true
     secrets:
       gh_token: ${{ secrets.GITHUB_TOKEN }}
