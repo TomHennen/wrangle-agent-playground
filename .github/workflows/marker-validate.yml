@@ -19,7 +19,7 @@ jobs:
       attestations: write
       actions: read
       security-events: write
-    uses: TomHennen/wrangle/.github/workflows/build_and_publish_npm.yml@d83d20779e4b57667a4d5b021906aec5f0b21467 # PR #678 head
+    uses: TomHennen/wrangle/.github/workflows/build_and_publish_npm.yml@d83d207e8106ff24ada72157d89ca8056ffa89db # PR #678 head
     with:
       path: sample-npm
       release-events: tag-only
