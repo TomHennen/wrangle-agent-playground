@@ -26,10 +26,12 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
 
       - name: Build (npm) with a selectable SBOM tool
         id: build
-        uses: TomHennen/wrangle/build/actions/npm@b260dca9f5fc57e6625d8cdd2edb97c11500bab2 # PR #676 head
+        uses: TomHennen/wrangle/build/actions/npm@93eeb6233e0e187aa7976f61e3bb5bc652615538 # main 2026-07-04
         with:
           path: sample-npm
           run-tests: "false"
