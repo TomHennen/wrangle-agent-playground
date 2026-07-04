@@ -17,7 +17,7 @@ jobs:
       contents: write
       id-token: write
       attestations: write
-    uses: TomHennen/wrangle/.github/workflows/build_and_publish_python.yml@b8d73ee5102a23d939132cbb2fa290ad0e5fffe4 # zizmor: ignore[unpinned-uses] PR #703 head under test
+    uses: TomHennen/wrangle/.github/workflows/build_and_publish_python.yml@a5af9d7a955e62fd0acc0087eee0f5f6ae70bcbf # zizmor: ignore[unpinned-uses] PR #703 head under test
     with:
       path: python-pip
       release-events: non-pull-request
@@ -30,7 +30,7 @@ jobs:
       packages: write
       id-token: write
       attestations: write
-    uses: TomHennen/wrangle/.github/workflows/build_and_publish_container.yml@b8d73ee5102a23d939132cbb2fa290ad0e5fffe4 # zizmor: ignore[unpinned-uses] PR #703 head under test
+    uses: TomHennen/wrangle/.github/workflows/build_and_publish_container.yml@a5af9d7a955e62fd0acc0087eee0f5f6ae70bcbf # zizmor: ignore[unpinned-uses] PR #703 head under test
     with:
       path: container
       imagename: ghcr.io/tomhennen/wrangle-agent-playground/phase3-sign
