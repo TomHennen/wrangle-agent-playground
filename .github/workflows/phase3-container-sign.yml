@@ -1,10 +1,9 @@
 name: phase3-container-sign
 
 # Playground validation for wrangle PR #703 (Phase 3 containerized signing).
-# Pins wrangle DIRECTLY at the PR head SHA and runs the python build+attest
-# reusable workflow twice: once with in-container keyless signing on
-# (verify-in-container: true) and once with the break-glass in-job path
-# (false), so their VSA signer identities can be compared.
+# Pins wrangle DIRECTLY at the PR head SHA and runs the build+attest reusable
+# workflows with in-container keyless signing on (verify-in-container: true),
+# plus a break-glass in-job job (false) for identity comparison.
 
 on:
   workflow_dispatch:
@@ -19,7 +18,7 @@ jobs:
       contents: write
       id-token: write
       attestations: write
-    uses: TomHennen/wrangle/.github/workflows/build_and_publish_python.yml@e799807c3ff998955221ab75082c478ace027403 # zizmor: ignore[unpinned-uses] PR #703 head under test
+    uses: TomHennen/wrangle/.github/workflows/build_and_publish_python.yml@6bbf2d73b11d81696336196398721db9f88b0a51 # zizmor: ignore[unpinned-uses] PR #703 head under test
     with:
       path: python-pip
       release-events: non-pull-request
@@ -32,8 +31,26 @@ jobs:
       contents: write
       id-token: write
       attestations: write
-    uses: TomHennen/wrangle/.github/workflows/build_and_publish_python.yml@e799807c3ff998955221ab75082c478ace027403 # zizmor: ignore[unpinned-uses] PR #703 head under test
+    uses: TomHennen/wrangle/.github/workflows/build_and_publish_python.yml@6bbf2d73b11d81696336196398721db9f88b0a51 # zizmor: ignore[unpinned-uses] PR #703 head under test
     with:
       path: python-pip
       release-events: non-pull-request
       verify-in-container: false
+
+  container:
+    permissions:
+      actions: read
+      security-events: write
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    uses: TomHennen/wrangle/.github/workflows/build_and_publish_container.yml@6bbf2d73b11d81696336196398721db9f88b0a51 # zizmor: ignore[unpinned-uses] PR #703 head under test
+    with:
+      path: container
+      imagename: ghcr.io/tomhennen/wrangle-agent-playground/phase3-sign
+      registry: ghcr.io
+      release-events: non-pull-request
+      verify-in-container: true
+    secrets:
+      gh_token: ${{ secrets.GITHUB_TOKEN }}
