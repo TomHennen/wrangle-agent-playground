@@ -1,0 +1,25 @@
+name: wrangle-attest demo
+on:
+  workflow_dispatch:
+permissions: {}
+jobs:
+  demo:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write   # ambient OIDC -> Fulcio, so signing needs no human
+      contents: read
+    steps:
+      - name: Check out wrangle @ #763
+        uses: actions/checkout@v4
+        with:
+          repository: TomHennen/wrangle
+          ref: f023468eab91076c280f2cef2fc3a846645c6c5d
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/go.mod
+          cache: false
+      - name: Build wrangle-attest
+        run: go -C tools build -o /tmp/wrangle-attest ./wrangle-attest
+      - name: Demo
+        run: bash $GITHUB_WORKSPACE/demo.sh
