@@ -1,7 +1,7 @@
 #!/bin/bash
 # demo.sh — run wrangle-attest over a known input set and print what comes out.
 set -uo pipefail
-set -f
+# globbing is used to walk the demo's own fixture dirs; no external input
 
 WA=/tmp/wrangle-attest
 D="$(mktemp -d)"
