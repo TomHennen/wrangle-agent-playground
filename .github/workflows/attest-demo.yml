@@ -18,7 +18,7 @@ jobs:
           ref: a74a5211554d27b4e721654e7efee7a6c779391a
           path: wrangle
           persist-credentials: false
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: wrangle/tools/go.mod
           cache: false
