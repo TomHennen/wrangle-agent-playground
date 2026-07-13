@@ -9,10 +9,10 @@ jobs:
       id-token: write   # ambient OIDC -> Fulcio, so signing needs no human
       contents: read
     steps:
-      - uses: actions/checkout@v4          # the playground: demo.sh
+      - uses: actions/checkout@v7          # the playground: demo.sh
         with:
           persist-credentials: false
-      - uses: actions/checkout@v4          # wrangle @ #763: the engine source
+      - uses: actions/checkout@v7          # wrangle @ #763: the engine source
         with:
           repository: TomHennen/wrangle
           ref: a74a5211554d27b4e721654e7efee7a6c779391a
