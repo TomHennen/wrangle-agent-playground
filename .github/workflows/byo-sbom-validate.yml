@@ -31,7 +31,7 @@ jobs:
 
       - name: Build (npm) with a selectable SBOM tool
         id: build
-        uses: TomHennen/wrangle/build/actions/npm@93eeb6233e0e187aa7976f61e3bb5bc652615538 # main 2026-07-04
+        uses: TomHennen/wrangle/build/actions/npm@ee6a1a73852105eb4ab8e49f2cb723bbebadb704 # main 2026-07-04
         with:
           path: sample-npm
           run-tests: "false"
