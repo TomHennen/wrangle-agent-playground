@@ -27,7 +27,7 @@ jobs:
       security-events: write
     steps:
       - name: Source scan
-        uses: TomHennen/wrangle/actions/scan@a6602ce65544b87c9360adc58a1dcdeb88b57521 # PR #622 head
+        uses: TomHennen/wrangle/actions/scan@4a36dcfec75bd792590bd2d5e84b3a156817bbe2 # PR #622 head
         with:
           checkout: "true"
           tools: "osv zizmor wrangle-lint"
