@@ -1,0 +1,7 @@
+name: selfref-inner
+description: Innermost action; prints which repo/commit it was loaded from.
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: echo "SELFREF-RESULT level=inner-action from=CALLEE-playground marker=v1"

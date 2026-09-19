@@ -1,0 +1,12 @@
+name: selfref-callee
+on:
+  workflow_call:
+permissions: {}
+jobs:
+  direct:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "SELFREF-RESULT level=callee-workflow from=CALLEE-playground marker=v1"
+      - uses: $/selfref/whoami
+  nested:
+    uses: $/.github/workflows/selfref-leaf.yml

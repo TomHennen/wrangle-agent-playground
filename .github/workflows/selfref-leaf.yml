@@ -1,0 +1,10 @@
+name: selfref-leaf
+on:
+  workflow_call:
+permissions: {}
+jobs:
+  leaf:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "SELFREF-RESULT level=leaf-workflow from=CALLEE-playground marker=v1"
+      - uses: $/selfref/inner

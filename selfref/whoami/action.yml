@@ -1,0 +1,8 @@
+name: selfref-whoami
+description: Prints which repo/commit it was loaded from, then nests a sibling via $/.
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: echo "SELFREF-RESULT level=outer-action from=CALLEE-playground marker=v1"
+    - uses: $/selfref/inner
