@@ -4,5 +4,5 @@ runs:
   using: composite
   steps:
     - shell: bash
-      run: echo "SELFREF-RESULT level=outer-action from=CALLEE-playground marker=v1"
+      run: echo "SELFREF-RESULT level=outer-action from=CALLEE-playground marker=v2"
     - uses: $/selfref/inner

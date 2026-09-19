@@ -4,4 +4,4 @@ runs:
   using: composite
   steps:
     - shell: bash
-      run: echo "SELFREF-RESULT level=inner-action from=CALLEE-playground marker=v1"
+      run: echo "SELFREF-RESULT level=inner-action from=CALLEE-playground marker=v2"
