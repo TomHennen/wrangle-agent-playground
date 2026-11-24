@@ -1,0 +1,27 @@
+name: Notify owner of weekly PR
+
+on:
+  pull_request:
+    types: [opened]
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: PR number to comment on
+        required: true
+
+permissions: {}
+
+jobs:
+  notify:
+    if: github.event_name == 'workflow_dispatch' || (startsWith(github.head_ref, 'deps/weekly-') && github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number || inputs.pr }}
+          REPO: ${{ github.repository }}
+        run: |
+          [[ "$PR" =~ ^[0-9]+$ ]] || { printf 'bad PR number\n' >&2; exit 2; }
+          gh pr comment "$PR" --repo "$REPO" --body "Weekly maintenance PR is ready for review."
