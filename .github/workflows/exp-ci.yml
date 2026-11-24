@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 permissions: {}
 jobs:
-  test:
+  exp-required-check:
     runs-on: ubuntu-latest
     permissions:
       contents: read
