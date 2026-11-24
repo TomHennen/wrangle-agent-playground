@@ -1,8 +1,6 @@
 name: exp-ci
 # Experiment: does a workflow_dispatch run satisfy a PR's required check?
 on:
-  pull_request:
-    branches: [exp-base]
   workflow_dispatch:
 permissions: {}
 jobs:

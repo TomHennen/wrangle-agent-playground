@@ -1,7 +1,11 @@
 name: exp-bot-pr
-# Experiment: a GITHUB_TOKEN-opened PR gets its CI by explicit dispatch, then merges itself.
+# Experiment: CI for a PR branch supplied by explicit dispatch with the workflow token, then a token merge.
 on:
   workflow_dispatch:
+    inputs:
+      branch:
+        required: true
+        type: string
 permissions: {}
 jobs:
   bot:
@@ -13,23 +17,10 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
-      BRANCH: bot/exp-${{ github.run_id }}
+      BRANCH: ${{ inputs.branch }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: exp-base
-      - name: Open the bot PR
-        run: |
-          git switch -c "$BRANCH"
-          date -u +%FT%TZ > exp-marker.txt
-          git add exp-marker.txt
-          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m "exp: bot change"
-          git push origin "$BRANCH"
-          gh pr create --base exp-base --head "$BRANCH" --title "exp: bot PR $GITHUB_RUN_ID" --body "experiment"
-      - name: Did pull_request CI fire on its own?
-        run: |
-          sleep 45
-          gh pr view "$BRANCH" --json statusCheckRollup,mergeStateStatus
+      - name: PR state before any CI
+        run: gh pr view "$BRANCH" --json statusCheckRollup,mergeStateStatus,headRefOid
       - name: Dispatch CI on the PR branch and wait
         run: |
           gh workflow run exp-ci.yml --ref "$BRANCH"
@@ -41,4 +32,5 @@ jobs:
           sleep 10
           gh pr view "$BRANCH" --json statusCheckRollup,mergeStateStatus,headRefOid
       - name: Merge with the workflow token
+        if: ${{ !cancelled() }}
         run: gh pr merge "$BRANCH" --squash
