@@ -1,0 +1,14 @@
+name: exp-ci
+# Experiment: does a workflow_dispatch run satisfy a PR's required check?
+on:
+  pull_request:
+    branches: [exp-base]
+  workflow_dispatch:
+permissions: {}
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - run: printf 'event=%s sha=%s ref=%s\n' "$GITHUB_EVENT_NAME" "$GITHUB_SHA" "$GITHUB_REF"

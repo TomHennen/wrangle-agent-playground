@@ -1,0 +1,44 @@
+name: exp-bot-pr
+# Experiment: a GITHUB_TOKEN-opened PR gets its CI by explicit dispatch, then merges itself.
+on:
+  workflow_dispatch:
+permissions: {}
+jobs:
+  bot:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      BRANCH: bot/exp-${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: exp-base
+      - name: Open the bot PR
+        run: |
+          git switch -c "$BRANCH"
+          date -u +%FT%TZ > exp-marker.txt
+          git add exp-marker.txt
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m "exp: bot change"
+          git push origin "$BRANCH"
+          gh pr create --base exp-base --head "$BRANCH" --title "exp: bot PR $GITHUB_RUN_ID" --body "experiment"
+      - name: Did pull_request CI fire on its own?
+        run: |
+          sleep 45
+          gh pr view "$BRANCH" --json statusCheckRollup,mergeStateStatus
+      - name: Dispatch CI on the PR branch and wait
+        run: |
+          gh workflow run exp-ci.yml --ref "$BRANCH"
+          sleep 15
+          run_id="$(gh run list --workflow exp-ci.yml --branch "$BRANCH" --event workflow_dispatch --limit 1 --json databaseId --jq '.[0].databaseId')"
+          gh run watch "$run_id" --exit-status
+      - name: PR state after dispatched CI
+        run: |
+          sleep 10
+          gh pr view "$BRANCH" --json statusCheckRollup,mergeStateStatus,headRefOid
+      - name: Merge with the workflow token
+        run: gh pr merge "$BRANCH" --squash
