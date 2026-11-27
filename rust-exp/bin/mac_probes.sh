@@ -34,3 +34,17 @@ sleep 8; p launchctl-submit "$(cat $OUT 2>/dev/null || echo no-output)"
 launchctl remove wrangle.probe.$$ >/dev/null 2>&1
 r=$(perl -e 'alarm 15; exec @ARGV' -- osascript -e 'do shell script "curl -s -o /dev/null -m 6 -w http=%{http_code} http://example.com"' 2>&1 | head -2); p osascript "$r"
 r=$(perl -e 'alarm 15; exec @ARGV' -- osascript -e 'tell application "System Events" to do shell script "id -un"' 2>&1|head -1); p osascript-sysevents "$r"
+# extra: other DNS/IPC channels and setuid
+r=$(perl -e 'alarm 8; exec @ARGV' -- dns-sd -G v4 example.com 2>&1 | head -3 | tr '\n' ' '); p dns-sd "$r"
+r=$(nslookup -timeout=3 example.com 2>&1 | head -4 | tr '\n' ' '); p nslookup "$r"
+r=$(perl -e 'alarm 5; exec @ARGV' -- nc -z -w 3 example.com 80 2>&1; echo rc=$?); p nc "$r"
+r=$(open -g http://example.com/?wrangle-probe 2>&1; echo rc=$?); p open-url "$r"
+r=$(perl -e 'use IO::Socket::UNIX; my $s=IO::Socket::UNIX->new(Peer=>"/private/var/run/mDNSResponder"); print $s?"connected":"blocked: $!"' 2>&1); p unix-mdnsresponder "$r"
+r=$(python3 - <<'PY' 2>&1 | tail -1
+import socket
+a=socket.socket();a.bind(("127.0.0.1",0));a.listen(1)
+b=socket.create_connection(a.getsockname(),2);c,_=a.accept();b.sendall(b"hi");print("loopback-tcp-ok",c.recv(2))
+PY
+); p loopback-tcp "$r"
+r=$(/usr/bin/sudo -n -u root /usr/bin/true 2>&1; echo rc=$?); p sudo-detail "$r"
+r=$(launchctl submit -l wrangle.probe2.$$ -o /tmp/ls2.$$ -- /usr/bin/true 2>&1; echo rc=$?); p launchctl-submit-detail "$r"

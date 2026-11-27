@@ -15,7 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-15, macos-14]
+        os: [macos-15]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -25,19 +25,25 @@ jobs:
       - name: online fetch
         working-directory: rust-exp/bin/macfix
         run: cargo fetch --locked
-      - name: sandbox profiles
-        run: |
-          for p in P0-deny-all P1-localhost P2-localhost+unix P3-localhost+bindunix P4-split-rules; do
-            echo "::group::$p"
-            bash rust-exp/bin/mac_run.sh "$p" || true
-            echo "::endgroup::"
-          done
       - name: summary (flat log)
         run: |
           for p in P0-deny-all P1-localhost P2-localhost+unix P3-localhost+bindunix P4-split-rules; do
             echo "=================== $p"
             bash rust-exp/bin/mac_run.sh "$p" 2>&1 | grep -E 'PROFILE|PROBE a\.|XPROBE|test |test result|Finished|error|INNER_RC|SANDBOX_EXEC_RC|deprecat|WARN' || true
           done
+
+      - name: control - the same escapes OUTSIDE the sandbox
+        run: |
+          OUT=/tmp/ctl-out; rm -f $OUT
+          launchctl submit -l wrangle.ctl -o $OUT -e $OUT -- /usr/bin/curl -s -o /dev/null -m 6 -w 'http=%{http_code}' http://example.com; echo "submit rc=$?"
+          sleep 8; echo "CTL launchctl-submit: $(cat $OUT 2>&1)"
+          echo "CTL osascript: $(osascript -e 'do shell script "curl -s -o /dev/null -m 6 -w http=%{http_code} http://example.com"' 2>&1)"
+          echo "CTL host: $(host -W 4 example.com 2>&1 | head -1)"
+          echo "CTL sudo-curl: $(sudo -n curl -s -o /dev/null -m 6 -w http=%{http_code} http://example.com 2>&1)"
+      - name: sandbox-exec deprecation text
+        run: |
+          sandbox-exec -p '(version 1)(allow default)' true; echo "rc=$? (stderr above, if any)"
+          man sandbox-exec 2>/dev/null | col -b | sed -n 1,40p | grep -iE 'deprecat|DEPRECAT' || echo "no deprecation text in man page"
 
   lock:
     runs-on: ubuntu-24.04
@@ -82,7 +88,7 @@ jobs:
           find x -type f -name 'cargo-auditable*' -exec cp {} "$HOME/auditbin/" \;
           chmod +x "$HOME/auditbin"/* || true
           ls -l "$HOME/auditbin"
-          echo "$HOME/auditbin" >> "$GITHUB_PATH"
+          if command -v cygpath >/dev/null; then cygpath -w "$HOME/auditbin" >> "$GITHUB_PATH"; else echo "$HOME/auditbin" >> "$GITHUB_PATH"; fi
       - name: build
         working-directory: rust-exp/bin/aud
         run: |
