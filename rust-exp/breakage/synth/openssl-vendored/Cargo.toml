@@ -1,0 +1,7 @@
+[package]
+name = "synth-openssl-vendored"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+openssl = { version = "*", features = ["vendored"] }

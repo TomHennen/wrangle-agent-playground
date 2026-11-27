@@ -1,0 +1,10 @@
+[package]
+name = "synth-prost-build"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+prost = "*"
+
+[build-dependencies]
+prost-build = "*"

@@ -1,0 +1,10 @@
+[package]
+name = "synth-bindgen"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+libc = "*"
+
+[build-dependencies]
+bindgen = "*"

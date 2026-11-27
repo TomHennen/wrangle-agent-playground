@@ -1,0 +1,7 @@
+[package]
+name = "synth-skia-safe"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+skia-safe = "*"

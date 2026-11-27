@@ -1,0 +1,126 @@
+name: exp-rust-breakage
+# Experiment: real-world breakage of "fetch online, build offline" (mechanism A sandbox).
+on:
+  push:
+    branches: [exp/rust-breakage]
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  cell:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: ripgrep, repo: BurntSushi/ripgrep }
+          - { name: bat, repo: sharkdp/bat }
+          - { name: fd, repo: sharkdp/fd }
+          - { name: hyperfine, repo: sharkdp/hyperfine }
+          - { name: starship, repo: starship/starship }
+          - { name: zoxide, repo: ajeetdsouza/zoxide }
+          - { name: just, repo: casey/just }
+          - { name: cargo-binstall, repo: cargo-bins/cargo-binstall, tagre: '^v[0-9]+\.[0-9]+\.[0-9]+$' }
+          - { name: cargo-nextest, repo: nextest-rs/nextest, tagre: '^cargo-nextest-[0-9]+\.[0-9]+\.[0-9]+$' }
+          - { name: mdbook, repo: rust-lang/mdBook }
+          - { name: tokei, repo: XAMPPRocky/tokei }
+          - { name: helix, repo: helix-editor/helix }
+          - { name: gitui, repo: gitui-org/gitui }
+          - { name: nushell, repo: nushell/nushell }
+          - { name: uv, repo: astral-sh/uv }
+          - { name: serde, repo: serde-rs/serde, pkg: serde, lib: true }
+          - { name: tokio, repo: tokio-rs/tokio, tagre: '^tokio-1\.[0-9]+\.[0-9]+$', pkg: tokio, lib: true }
+          - { name: hyper, repo: hyperium/hyper, pkg: hyper, lib: true }
+          - { name: reqwest, repo: seanmonstar/reqwest, pkg: reqwest, lib: true }
+          - { name: clap, repo: clap-rs/clap, tagre: '^v4\.[0-9]+\.[0-9]+$', pkg: clap, lib: true }
+          - { name: regex, repo: rust-lang/regex, tagre: '^[0-9]+\.[0-9]+\.[0-9]+$', pkg: regex, lib: true }
+          - { name: rand, repo: rust-random/rand, pkg: rand, lib: true }
+          - { name: anyhow, repo: dtolnay/anyhow, pkg: anyhow, lib: true }
+          - { name: itoa, repo: dtolnay/itoa, pkg: itoa, lib: true }
+          - { name: axum, repo: tokio-rs/axum, tagre: '^axum-v[0-9]+\.[0-9]+\.[0-9]+$', pkg: axum, lib: true }
+          - { name: tonic, repo: hyperium/tonic, pkg: tonic, lib: true }
+          - { name: tracing, repo: tokio-rs/tracing, tagre: '^tracing-0\.1\.[0-9]+$', pkg: tracing, lib: true }
+          - { name: rayon, repo: rayon-rs/rayon, tagre: '^rayon-1\.[0-9]+\.[0-9]+$', pkg: rayon, lib: true }
+          - { name: jiff, repo: BurntSushi/jiff, pkg: jiff, lib: true }
+          - { name: sqlx, repo: launchbadge/sqlx, pkg: sqlx, lib: true }
+          - { name: openssl-system, repo: synth }
+          - { name: openssl-vendored, repo: synth }
+          - { name: ring, repo: synth }
+          - { name: aws-lc-rs, repo: synth }
+          - { name: rustls, repo: synth }
+          - { name: rusqlite-bundled, repo: synth }
+          - { name: git2, repo: synth }
+          - { name: zstd, repo: synth }
+          - { name: pyo3, repo: synth }
+          - { name: ort, repo: synth }
+          - { name: skia-safe, repo: synth }
+          - { name: jemalloc, repo: synth }
+          - { name: rdkafka, repo: synth }
+          - { name: v8, repo: synth }
+          - { name: prost-build, repo: synth }
+          - { name: bindgen, repo: synth }
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: free disk + system prerequisites
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq protobuf-compiler libssl-dev pkg-config cmake libclang-dev python3-dev
+          df -h / | tail -1
+      - name: run cell
+        env:
+          NAME: ${{ matrix.name }}
+          REPO: ${{ matrix.repo }}
+          TAGRE: ${{ matrix.tagre }}
+          PKG: ${{ matrix.pkg }}
+          LIB: ${{ matrix.lib }}
+          OUT: ${{ github.workspace }}/out
+        run: |
+          [[ -n "$TAGRE" ]] || unset TAGRE
+          [[ -n "$PKG" ]] || unset PKG
+          [[ -n "$LIB" ]] || unset LIB
+          bash rust-exp/breakage/run_cell.sh
+      - name: collect
+        if: always()
+        run: |
+          mkdir -p out/logs; mkdir -p upload/result upload/logs
+          cp out/result.json upload/result/ 2>/dev/null || true
+          cp out/logs/* upload/logs/ 2>/dev/null || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: result-${{ matrix.name }}
+          path: upload/result
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: logs-${{ matrix.name }}
+          path: upload/logs
+          retention-days: 7
+
+  aggregate:
+    needs: cell
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: result-*
+          path: results
+      - name: aggregate
+        run: bash rust-exp/breakage/aggregate.sh results summary | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: summary
+          path: summary
