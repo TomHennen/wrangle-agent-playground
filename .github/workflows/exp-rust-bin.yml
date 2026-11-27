@@ -40,6 +40,11 @@ jobs:
           echo "CTL osascript: $(osascript -e 'do shell script "curl -s -o /dev/null -m 6 -w http=%{http_code} http://example.com"' 2>&1)"
           echo "CTL host: $(host -W 4 example.com 2>&1 | head -1)"
           echo "CTL sudo-curl: $(sudo -n curl -s -o /dev/null -m 6 -w http=%{http_code} http://example.com 2>&1)"
+      - name: P4 out-of-process escapes
+        run: |
+          PROF='(version 1)(allow default)(deny network*)(allow network-bind (local ip "localhost:*"))(allow network-inbound (local ip "localhost:*"))(allow network-outbound (remote ip "localhost:*"))'
+          sandbox-exec -p "$PROF" bash rust-exp/bin/mac_escape.sh 2>&1
+          echo "--- control (unsandboxed) result for launchd job:"; cat /tmp/esc-launchd.txt 2>&1 || true
       - name: sandbox-exec deprecation text
         run: |
           sandbox-exec -p '(version 1)(allow default)' true; echo "rc=$? (stderr above, if any)"
