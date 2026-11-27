@@ -17,7 +17,7 @@ TAG=""; TAGNOTE=""
 if [[ "$REPO" == synth ]]; then
   cp -r "$HERE/synth/$NAME" "$SRC"; TAG=synthetic
 else
-  TAG="$(git ls-remote --tags --refs "https://github.com/$REPO" | awk '{sub("refs/tags/","",$2); print $2}' | grep -E "$TAGRE" | sort -V | tail -1)"
+  TAG="$(git ls-remote --tags --refs "https://github.com/$REPO" | awk '{sub("refs/tags/","",$2); print $2}' | grep -E "$TAGRE" | awk '{k=$0; sub(/^[^0-9]*/,"",k); print k "\t" $0}' | sort -V | tail -1 | cut -f2)"
   if [[ -n "$TAG" ]]; then
     git clone -q --depth 1 --branch "$TAG" "https://github.com/$REPO" "$SRC"
   else
@@ -79,7 +79,7 @@ run_step() {
 STEPS=(build testc testr)
 declare -A CMD TMO
 CMD[build]="cargo build --offline --locked --keep-going"; TMO[build]=2400
-CMD[testc]="cargo test --offline --locked --no-run --keep-going"; TMO[testc]=2400
+CMD[testc]="cargo test --offline --locked --no-run"; TMO[testc]=2400
 CMD[testr]="cargo test --offline --locked --no-fail-fast"; TMO[testr]=1200
 if [[ "$LIB" == true ]]; then
   STEPS+=(pkg)
@@ -96,10 +96,10 @@ for s in "${STEPS[@]}"; do
   [[ "$rc" == 0 || "$rc" == 124 || "$rc" == skip || -z "$rc" ]] && continue
   if ((SECONDS > BUDGET + 1500)); then continue; fi
   # shellcheck disable=SC2086
-  run_step nosb "$s" 900 ${CMD[$s]}
+  run_step nosb "$s" 900 ${CMD[$s]/ --offline/}
   if [[ "$(cat "$OUT/logs/$s.nosb.rc")" != 0 ]] && ((SECONDS < BUDGET + 1500)); then
     # shellcheck disable=SC2086
-    run_step full "$s" 900 ${CMD[$s]}
+    run_step full "$s" 900 ${CMD[$s]/ --offline/}
   fi
 done
 
