@@ -97,7 +97,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        tc: [stable, beta, 1.100.0, 1.99.0, 1.95.0, 1.90.0, 1.85.0, 1.80.0]
+        tc: [stable, beta, 1.100.0, 1.99.0, 1.95.0, 1.94.0, 1.93.0, 1.92.0, 1.91.0, 1.90.0, 1.85.0, 1.84.0, 1.83.0, 1.80.0]
     steps:
       - uses: actions/checkout@v4
       - name: q3
