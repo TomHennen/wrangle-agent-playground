@@ -49,9 +49,9 @@ case "$MECH" in
       -v "$CARGO_HOME/registry":/cargo/registry:ro \
       -v "$WORKDIR":/work \
       -e HOME=/work -e CARGO_HOME=/cargo -e CARGO_TARGET_DIR=/work/target \
-      -e WORKDIR=/work/rust-exp/sandbox \
+      -e WORKDIR=/work \
       -w /work \
-      "$IMG" bash /work/rust-exp/sandbox/offline_phase.sh ;;
+      "$IMG" bash /work/offline_phase.sh ;;
 
   C-bwrap)
     # Unprivileged user namespace + net unshare. May fail if
@@ -73,6 +73,9 @@ case "$MECH" in
     # The uid is not in the docker group, so the socket path is closed too.
     sudo useradd -m builder 2>/dev/null || true
     BUID="$(id -u builder)"
+    # Let the dedicated uid traverse into the runner's home to read the
+    # read-only toolchain + fetched registry (the home is mode 0750).
+    sudo chmod o+x /home/runner
     sudo nft -f - <<NFT
 table inet probe {
   chain out {

@@ -29,6 +29,9 @@ jobs:
       RUST_IMAGE: rust:1-bookworm
     steps:
       - uses: actions/checkout@v4
+      - name: install bubblewrap (C only)
+        if: startsWith(matrix.mechanism, 'C-')
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq bubblewrap
       - name: environment probe
         run: |
           set -x
