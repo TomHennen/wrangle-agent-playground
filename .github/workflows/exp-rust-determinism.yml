@@ -114,6 +114,7 @@ jobs:
       - name: network and download behaviour
         working-directory: rust-exp/determinism
         run: |
+          set +e
           show() { echo "--- $1: crates in cache: $(find "$CARGO_HOME/registry/cache" -name '*.crate' 2>/dev/null | wc -l); index dirs: $(ls "$CARGO_HOME/registry/index" 2>/dev/null | tr '\n' ' ')"; }
           export CARGO_HOME=$RUNNER_TEMP/ch-empty-offline; mkdir -p "$CARGO_HOME"
           echo "### A: empty CARGO_HOME, --offline --no-verify"
@@ -141,6 +142,7 @@ jobs:
       - name: --locked with stale lock
         working-directory: rust-exp/determinism
         run: |
+          set +e
           cp Cargo.lock /tmp/Cargo.lock.bak
           sed -i 's/^version = "1.0.19"/version = "1.0.18"/' Cargo.lock
           cargo package --locked --no-verify; echo "exit=$? (tampered lock, --locked)"
@@ -157,6 +159,7 @@ jobs:
           path: art
       - name: compare
         run: |
+          set +e +o pipefail
           cd art
           echo "=== digests ==="
           for d in */; do d=${d%/}; for f in package publish-dry; do [[ -f $d/$f.sha ]] && echo "$(cut -d' ' -f1 $d/$f.sha)  $d/$f"; done; done | sort
