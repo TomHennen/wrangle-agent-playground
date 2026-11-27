@@ -40,8 +40,18 @@ for mode in "--no-verify" ""; do
   C=$(ls target/package/*.crate 2>/dev/null | head -1)
   [[ -n "$C" ]] && { sha256sum "$C"; [[ -z "$mode" ]] && cp "$C" "$OUT/verify.crate" && sha256sum "$C" > "$OUT/verify.sha"; }
 done
-rm -rf target/package; cargo package --locked --no-verify 2>&1 | tail -3
-C=$(ls target/package/*.crate | head -1); cp "$C" "$OUT/A.crate"; sha256sum "$C" | tee "$OUT/A.sha"
+vi() { rm -rf "$W/xv"; mkdir "$W/xv"; tar xzf "$1" -C "$W/xv"; echo "vcs_info: $(tr -d ' \n' < "$W"/xv/*/.cargo_vcs_info.json)"; }
+echo "--- workaround 1: --allow-dirty"
+rm -rf target/package; cargo package --locked --no-verify --allow-dirty 2>&1 | tail -2; C=$(ls target/package/*.crate | head -1); sha256sum "$C"; vi "$C"
+echo "--- workaround 3: git add -N (intent-to-add)"
+git add -N Cargo.lock; git status --short Cargo.lock
+rm -rf target/package; cargo package --locked --no-verify 2>&1 | tail -2; C=$(ls target/package/*.crate 2>/dev/null| head -1); [[ -n "$C" ]] && { sha256sum "$C"; vi "$C"; }
+git reset -q Cargo.lock
+echo "--- workaround 2: .git/info/exclude"
+if [[ -n "$(git status --short Cargo.lock)" ]]; then echo "Cargo.lock" >> "$(git rev-parse --git-dir)/info/exclude"; fi
+git status --short Cargo.lock
+rm -rf target/package; cargo package --locked --no-verify 2>&1 | tail -2
+C=$(ls target/package/*.crate | head -1); vi "$C"; cp "$C" "$OUT/A.crate"; sha256sum "$C" | tee "$OUT/A.sha"
 rm -rf "$W/xa"; mkdir "$W/xa"; tar xzf "$C" -C "$W/xa"; cmp "$W/xa"/*/Cargo.lock Cargo.lock && echo "RESULT embedded Cargo.lock IDENTICAL to generated"
 cat "$W"/xa/*/.cargo_vcs_info.json; echo
 cp Cargo.lock "$OUT/generated.Cargo.lock"

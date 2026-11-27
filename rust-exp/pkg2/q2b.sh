@@ -9,6 +9,7 @@ echo "committed Cargo.lock: '$(git ls-files Cargo.lock)'; present: $(ls Cargo.lo
 sha() { sha256sum "$1" | cut -d' ' -f1; }
 echo "######## B1: with extracted lock"
 mkdir "$W/xb"; tar xzf "$DL/A.crate" -C "$W/xb"; cp "$W"/xb/*/Cargo.lock Cargo.lock
+[[ -n "$(git status --short Cargo.lock)" ]] && { echo "Cargo.lock untracked+visible; adding to info/exclude"; echo Cargo.lock >> "$(git rev-parse --git-dir)/info/exclude"; }
 cargo package --no-verify --locked 2>&1 | tail -3; C=$(ls target/package/*.crate | head -1); echo "B1 package: $(sha "$C")"
 [[ $(sha "$C") == $(cut -d' ' -f1 "$DL/A.sha") ]] && echo "RESULT B1 package SAME as A" || echo "RESULT B1 package DIFFERENT from A"
 cargo publish --dry-run --no-verify --locked 2>&1 | tail -4; echo "publish rc=${PIPESTATUS[0]}"

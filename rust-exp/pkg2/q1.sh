@@ -13,6 +13,7 @@ else
   TAG=$(git ls-remote --tags "https://github.com/$SRC" | awk '{print $2}' | sed 's#refs/tags/##' | grep -v '\^{}' | grep -E "(^|[-/v])${VER//./\\.}\$" | head -3 | tr '\n' ' ')
   echo "crates.io max_stable=$VER candidate tags: $TAG"
   T=$(echo "$TAG" | awk '{for(i=1;i<=NF;i++) if($i ~ /^'"$M"'-/ ) {print $i; exit}} END{}')
+  [[ -n "$T" ]] || T=$(echo "$TAG" | tr ' ' '\n' | grep -E "^v?${VER//./\\.}\$" | head -1)
   [[ -n "$T" ]] || T=$(echo "$TAG" | awk '{print $1}')
   echo "using tag $T"
   git clone --depth 1 -b "$T" "https://github.com/$SRC" "$W/repo" 2>&1 | tail -1
@@ -25,6 +26,7 @@ echo "######## BASELINE: plain verifying 'cargo package --locked'"
 export CARGO_HOME="$W/ch-base"; mkdir -p "$CARGO_HOME"
 cargo package --locked "${PKG[@]}" 2>&1 | tail -5; echo "rc=${PIPESTATUS[0]}"
 CR=$(ls target/package/*.crate 2>/dev/null | head -1); echo "crate: $CR"
+echo "Cargo.lock after baseline: $(ls Cargo.lock 2>&1) ; git-ignored: $(git check-ignore Cargo.lock || echo no)"
 [[ -n "$CR" ]] && { sha256sum "$CR" | tee "$OUT/base.sha"; cp "$CR" "$OUT/base.crate"; }
 rm -rf target/package
 echo "######## STEP 1: cargo package --no-verify --locked (empty CARGO_HOME, network on)"
