@@ -4,15 +4,185 @@ on:
     branches: [exp/rust-determinism]
 permissions:
   contents: read
+defaults:
+  run:
+    shell: bash
+env:
+  CRATE: wr-det-exp-0.1.0.crate
 jobs:
-  lockgen:
+  pkg:
+    name: pkg ${{ matrix.os }} ${{ matrix.mode }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, ubuntu-24.04-arm, macos-15, windows-2025]
+        mode: [verify, noverify]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Q6 toolchain
+        working-directory: rust-exp/determinism
+        run: |
+          echo "autocrlf: $(git config --show-origin core.autocrlf || echo unset)"
+          rustup --version
+          echo "before:"; rustup toolchain list
+          cargo -V 2>&1 | tee ../q6.txt
+          echo "after:"; rustup toolchain list
+          rustc -V; cargo -V
+      - name: package
+        working-directory: rust-exp/determinism
+        run: |
+          sum() { if command -v sha256sum >/dev/null; then sha256sum "$1"; else shasum -a 256 "$1"; fi; }
+          mkdir -p ../out
+          if [[ "${{ matrix.mode }}" == verify ]]; then cargo package --locked; else cargo package --locked --no-verify; fi
+          sum target/package/$CRATE | tee ../out/package.sha
+          cp target/package/$CRATE ../out/package.crate
+          cargo publish --dry-run --no-verify --locked
+          sum target/package/$CRATE | tee ../out/publish-dry.sha
+          cp target/package/$CRATE ../out/publish-dry.crate
+          ls -l target/package/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: out-${{ matrix.os }}-${{ matrix.mode }}
+          path: rust-exp/out
+
+  var:
+    name: var ${{ matrix.name }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {name: shallow, depth: 1, path: repo}
+          - {name: full, depth: 0, path: repo}
+          - {name: otherpath, depth: 1, path: x/y/z}
+          - {name: stray, depth: 1, path: repo, stray: rust-exp/determinism/stray.txt}
+          - {name: stray-excluded, depth: 1, path: repo, stray: rust-exp/determinism/junk/new.txt}
+          - {name: stray-gitignored, depth: 1, path: repo, stray: rust-exp/determinism/build.log}
+          - {name: umask077, depth: 1, path: repo, umask: "077"}
+          - {name: offline, depth: 1, path: repo, offline: "1"}
+          - {name: offline-nofetch, depth: 1, path: repo, offline: "1", nofetch: "1"}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: ${{ matrix.depth }}
+          path: ${{ matrix.path }}
+      - name: run
+        env:
+          P: ${{ matrix.path }}
+          STRAY: ${{ matrix.stray }}
+          UM: ${{ matrix.umask }}
+          OFFLINE: ${{ matrix.offline }}
+          NOFETCH: ${{ matrix.nofetch }}
+        run: |
+          mkdir -p out
+          cd "$P"
+          echo '*.log' >> .git/info/exclude
+          cd rust-exp/determinism
+          cd "$GITHUB_WORKSPACE/$P"
+          if [[ -n "$STRAY" ]]; then echo stray > "$STRAY"; fi
+          if [[ -n "$UM" ]]; then umask "$UM"; chmod -R go-rwx . ; fi
+          cd rust-exp/determinism
+          FLAGS="--locked --no-verify"
+          if [[ -n "$OFFLINE" ]]; then
+            [[ -n "$NOFETCH" ]] || cargo fetch --locked
+            FLAGS="$FLAGS --offline"
+          fi
+          set +e
+          cargo package $FLAGS 2>&1 | tee "$GITHUB_WORKSPACE/out/log.txt"
+          rc=${PIPESTATUS[0]}
+          echo "exit=$rc (without --allow-dirty)" | tee -a "$GITHUB_WORKSPACE/out/log.txt"
+          if [[ $rc -ne 0 && -n "$STRAY" ]]; then
+            cargo package $FLAGS --allow-dirty 2>&1 | tee -a "$GITHUB_WORKSPACE/out/log.txt"
+            rc=${PIPESTATUS[0]}; echo "exit=$rc (with --allow-dirty)"
+          fi
+          if [[ $rc -eq 0 ]]; then
+            cp target/package/$CRATE "$GITHUB_WORKSPACE/out/package.crate"
+            sha256sum target/package/$CRATE | tee "$GITHUB_WORKSPACE/out/package.sha"
+            tar tvzf target/package/$CRATE | grep -E 'stray|new.txt|build.log' || echo "(stray file not in crate)"
+          fi
+          exit 0
+      - uses: actions/upload-artifact@v4
+        with:
+          name: var-${{ matrix.name }}
+          path: out
+
+  q5:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - run: |
-          cd rust-exp/determinism
-          cargo --version
-          cargo generate-lockfile
-          echo ===LOCK-B64===
-          base64 -w0 Cargo.lock
-          echo
+      - name: network and download behaviour
+        working-directory: rust-exp/determinism
+        run: |
+          show() { echo "--- $1: crates in cache: $(find "$CARGO_HOME/registry/cache" -name '*.crate' 2>/dev/null | wc -l); index dirs: $(ls "$CARGO_HOME/registry/index" 2>/dev/null | tr '\n' ' ')"; }
+          export CARGO_HOME=$RUNNER_TEMP/ch-empty-offline; mkdir -p "$CARGO_HOME"
+          echo "### A: empty CARGO_HOME, --offline --no-verify"
+          cargo package --locked --no-verify --offline; echo "exit=$?"; show A
+          export CARGO_HOME=$RUNNER_TEMP/ch-noverify; mkdir -p "$CARGO_HOME"
+          echo "### B: empty CARGO_HOME, online --no-verify"
+          cargo package --locked --no-verify -v; echo "exit=$?"; show B
+          sha256sum target/package/$CRATE
+          export CARGO_HOME=$RUNNER_TEMP/ch-verify; mkdir -p "$CARGO_HOME"
+          echo "### C: empty CARGO_HOME, online verify"
+          cargo package --locked 2>&1 | tail -15; show C
+          sha256sum target/package/$CRATE
+          export CARGO_HOME=$RUNNER_TEMP/ch-nonet; mkdir -p "$CARGO_HOME"
+          echo "### D: empty CARGO_HOME, NO network (unshare -n), --no-verify"
+          sudo unshare -n sudo -u "$USER" env "PATH=$PATH" "CARGO_HOME=$CARGO_HOME" "HOME=$HOME" cargo package --locked --no-verify 2>&1 | tail -8; show D
+          echo "### E: after cargo fetch (empty home), NO network, --no-verify"
+          cargo fetch --locked; show E-fetched
+          sudo unshare -n sudo -u "$USER" env "PATH=$PATH" "CARGO_HOME=$CARGO_HOME" "HOME=$HOME" cargo package --locked --no-verify 2>&1 | tail -8
+          sha256sum target/package/$CRATE
+          echo "### F: lockfile embedded vs repo"
+          cd "$RUNNER_TEMP" && rm -rf x && mkdir x && cd x
+          tar xzf "$GITHUB_WORKSPACE/rust-exp/determinism/target/package/$CRATE"
+          cmp wr-det-exp-0.1.0/Cargo.lock "$GITHUB_WORKSPACE/rust-exp/determinism/Cargo.lock" && echo "Cargo.lock IDENTICAL"
+          cat wr-det-exp-0.1.0/.cargo_vcs_info.json
+      - name: --locked with stale lock
+        working-directory: rust-exp/determinism
+        run: |
+          cp Cargo.lock /tmp/Cargo.lock.bak
+          sed -i 's/^version = "1.0.19"/version = "1.0.18"/' Cargo.lock
+          cargo package --locked --no-verify; echo "exit=$? (tampered lock, --locked)"
+          cp /tmp/Cargo.lock.bak Cargo.lock
+
+  compare:
+    needs: [pkg, var, q5]
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: art
+      - name: compare
+        run: |
+          cd art
+          echo "=== digests ==="
+          for d in */; do d=${d%/}; for f in package publish-dry; do [[ -f $d/$f.sha ]] && echo "$(cut -d' ' -f1 $d/$f.sha)  $d/$f"; done; done | sort
+          BASE=out-ubuntu-24.04-noverify/package.crate
+          mkdir -p ex
+          for d in */; do d=${d%/}; [[ $d == ex ]] && continue
+            for f in package publish-dry; do
+              [[ -f $d/$f.crate ]] || continue
+              mkdir -p ex/$d-$f; tar xzf $d/$f.crate -C ex/$d-$f
+              tar tvzf $d/$f.crate > ex/$d-$f.list
+            done
+          done
+          tar tvzf $BASE > ex/base.list
+          echo; echo "=== vs baseline (ubuntu-24.04 noverify) ==="
+          for d in */; do d=${d%/}; [[ $d == ex ]] && continue
+            for f in package publish-dry; do
+              [[ -f $d/$f.crate ]] || continue
+              if cmp -s $BASE $d/$f.crate; then echo "SAME   $d/$f"; else
+                echo "DIFFER $d/$f"; cmp -l $BASE $d/$f.crate | head -3
+                echo " -- tar listing diff:"; diff ex/base.list ex/$d-$f.list | head -20
+                echo " -- content diff:"; diff -r ex/out-ubuntu-24.04-noverify-package ex/$d-$f | head -30
+              fi
+            done
+          done
+          echo; echo "=== embedded Cargo.lock vs repo ==="
+          for x in ex/*-package; do cmp -s $x/wr-det-exp-0.1.0/Cargo.lock ../rust-exp/determinism/Cargo.lock && echo "same  $x" || echo "DIFF  $x"; done
+          echo; echo "=== vcs info ==="
+          for x in ex/*-package; do echo "$x: $(cat $x/wr-det-exp-0.1.0/.cargo_vcs_info.json | tr -d '\n ')"; done
+          echo; echo "=== baseline listing ==="; cat ex/base.list
