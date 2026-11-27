@@ -1,0 +1,113 @@
+name: exp-rust-pkg2
+on:
+  push:
+    branches: [exp/rust-pkg2]
+permissions:
+  contents: read
+defaults:
+  run:
+    shell: bash
+jobs:
+  q1:
+    name: q1 ${{ matrix.name }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {name: fixture, src: fixture, member: wr-det-exp}
+          - {name: axum, src: tokio-rs/axum, member: axum}
+          - {name: clap, src: clap-rs/clap, member: clap}
+          - {name: jiff, src: BurntSushi/jiff, member: jiff}
+          - {name: regex, src: rust-lang/regex, member: regex}
+          - {name: tracing, src: tokio-rs/tracing, member: tracing}
+          - {name: tokio, src: tokio-rs/tokio, member: tokio}
+    steps:
+      - uses: actions/checkout@v4
+      - name: q1
+        env:
+          SRC: ${{ matrix.src }}
+          MEMBER: ${{ matrix.member }}
+        run: rust-exp/pkg2/q1.sh "$SRC" "$MEMBER" 2>&1 | tee q1.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: q1-${{ matrix.name }}
+          path: |
+            out
+            q1.log
+  q2a:
+    name: q2a ${{ matrix.name }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {name: nolock, src: nolock, crate: x}
+          - {name: anyhow, src: dtolnay/anyhow, crate: anyhow}
+          - {name: itoa, src: dtolnay/itoa, crate: itoa}
+          - {name: rand, src: rust-random/rand, crate: rand}
+    steps:
+      - uses: actions/checkout@v4
+      - name: q2a
+        env:
+          SRC: ${{ matrix.src }}
+          CRATE: ${{ matrix.crate }}
+        run: rust-exp/pkg2/q2a.sh "$SRC" "$CRATE" 2>&1 | tee q2a.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: q2a-${{ matrix.name }}
+          path: |
+            out
+            q2a.log
+  q2b:
+    name: q2b ${{ matrix.name }}
+    needs: q2a
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {name: nolock, src: nolock, crate: x}
+          - {name: anyhow, src: dtolnay/anyhow, crate: anyhow}
+          - {name: itoa, src: dtolnay/itoa, crate: itoa}
+          - {name: rand, src: rust-random/rand, crate: rand}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: q2a-${{ matrix.name }}
+          path: ${{ runner.temp }}/dl0
+      - name: place artifact
+        run: mkdir -p "$RUNNER_TEMP/dl" && cp "$RUNNER_TEMP"/dl0/out/A.crate "$RUNNER_TEMP"/dl0/out/A.sha "$RUNNER_TEMP/dl/"
+      - name: q2b
+        env:
+          SRC: ${{ matrix.src }}
+          CRATE: ${{ matrix.crate }}
+        run: rust-exp/pkg2/q2b.sh "$SRC" "$CRATE" 2>&1 | tee q2b.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: q2b-${{ matrix.name }}
+          path: q2b.log
+  q3:
+    name: q3 ${{ matrix.tc }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        tc: [stable, beta, 1.100.0, 1.99.0, 1.95.0, 1.90.0, 1.85.0, 1.80.0]
+    steps:
+      - uses: actions/checkout@v4
+      - name: q3
+        env:
+          TC: ${{ matrix.tc }}
+        run: rust-exp/pkg2/q3.sh "$TC" 2>&1 | tee q3.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: q3-${{ matrix.tc }}
+          path: |
+            out
+            q3.log

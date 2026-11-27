@@ -1,0 +1,15 @@
+[package]
+name = "wr-det-exp"
+version = "0.1.0"
+edition = "2021"
+description = "Throwaway fixture for cargo package determinism experiments"
+license = "MIT"
+repository = "https://github.com/TomHennen/wrangle-agent-playground"
+readme = "README.md"
+build = "build.rs"
+exclude = ["junk/*", "*.tmp"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+libc = "0.2"
+itoa = "1"
