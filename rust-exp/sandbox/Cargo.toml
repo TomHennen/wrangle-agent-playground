@@ -1,0 +1,13 @@
+[package]
+name = "wrangle-sandbox-probe"
+version = "0.0.0"
+edition = "2021"
+publish = false
+build = "build.rs"
+
+# A couple of real dependencies so fetch/offline behaviour is realistic.
+[dependencies]
+anyhow = "1.0.86"
+once_cell = "1.19.0"
+
+[dev-dependencies]
