@@ -1,0 +1,99 @@
+name: exp-rust-attest
+on:
+  push:
+    branches: [exp/rust-attest]
+permissions:
+  contents: read
+jobs:
+  a-noauth:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          B=https://api.github.com/repos/TomHennen/wrangle-test/attestations
+          rust-exp/attest/fetch.sh noauth "$B/sha256:$D"
+          rust-exp/attest/fetch.sh noauth-noattest "$B/sha256:0000000000000000000000000000000000000000000000000000000000000001"
+          rust-exp/attest/fetch.sh noauth-pred "$B/sha256:$D?predicate_type=https://slsa.dev/verification_summary/v1"
+          rust-exp/attest/fetch.sh noauth-perpage "$B/sha256:$D?per_page=2"
+          echo "-- bundle_url unauth fetch"
+          u=$(jq -r '.attestations[0].bundle_url' /tmp/body.noauth)
+          curl -s -o /dev/null -w "bundle_url status=%{http_code}\n" "$u"
+          echo "-- private repo, no auth"
+          rust-exp/attest/fetch.sh noauth-private "https://api.github.com/repos/TomHennen/wrangle-agent-playground-private/attestations/sha256:$D"
+        env:
+          D: 2120bc91ec714638982e32d04e23a8a0063da93fc49bd9647c5c0fb07a75423c
+  b-contents-read:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          B=https://api.github.com/repos/TomHennen/wrangle-test/attestations
+          rust-exp/attest/fetch.sh tok "$B/sha256:$D" "$GH_TOKEN"
+          rust-exp/attest/fetch.sh tok-noattest "$B/sha256:0000000000000000000000000000000000000000000000000000000000000001" "$GH_TOKEN"
+          rust-exp/attest/fetch.sh tok-pred "$B/sha256:$D?predicate_type=https://slsa.dev/verification_summary/v1" "$GH_TOKEN"
+          rust-exp/attest/fetch.sh tok-perpage "$B/sha256:$D?per_page=2" "$GH_TOKEN"
+          echo "-- private repo, GITHUB_TOKEN"
+          rust-exp/attest/fetch.sh tok-private "https://api.github.com/repos/TomHennen/wrangle-agent-playground-private/attestations/sha256:$D" "$GH_TOKEN"
+          echo "-- rate_limit"
+          curl -s -H "Authorization: Bearer $GH_TOKEN" https://api.github.com/rate_limit | jq -c .resources.core
+        env:
+          D: 2120bc91ec714638982e32d04e23a8a0063da93fc49bd9647c5c0fb07a75423c
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  c-attestations-read:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      attestations: read
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          B=https://api.github.com/repos/TomHennen/wrangle-test/attestations
+          rust-exp/attest/fetch.sh tokatt "$B/sha256:$D" "$GH_TOKEN"
+          rust-exp/attest/fetch.sh tokatt-pred "$B/sha256:$D?predicate_type=https://slsa.dev/verification_summary/v1" "$GH_TOKEN"
+          echo "-- bundle_url with auth header"
+          u=$(jq -r '.attestations[0].bundle_url' /tmp/body.tokatt)
+          curl -s -o /dev/null -w "bundle_url status=%{http_code}\n" -H "Authorization: Bearer $GH_TOKEN" "$u"
+        env:
+          D: 2120bc91ec714638982e32d04e23a8a0063da93fc49bd9647c5c0fb07a75423c
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  d-gh-attestation-verify:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - run: |
+          gh release download v0.4.0 -R TomHennen/wrangle-test -p 'wrangle-test-fixture-go_0.4.0_linux_amd64.tar.gz'
+          sha256sum wrangle-test-fixture-go_0.4.0_linux_amd64.tar.gz
+          gh attestation verify --repo TomHennen/wrangle-test wrangle-test-fixture-go_0.4.0_linux_amd64.tar.gz 2>&1 | tail -15; echo "exit=${PIPESTATUS[0]}"
+          echo "---- with predicate-type VSA, json"
+          gh attestation verify --repo TomHennen/wrangle-test --predicate-type https://slsa.dev/verification_summary/v1 wrangle-test-fixture-go_0.4.0_linux_amd64.tar.gz 2>&1 | tail -8
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  e-ampel:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/setup-go@v5
+        with: {go-version: stable}
+      - run: |
+          go install github.com/carabiner-dev/ampel/cmd/ampel@v1.3.10
+          ampel version || true
+          gh release download v0.4.0 -R TomHennen/wrangle-test -p 'wrangle-test-fixture-go_0.4.0_linux_amd64.tar.gz'
+          echo "== github: collector with GITHUB_TOKEN"
+          ampel verify --subject wrangle-test-fixture-go_0.4.0_linux_amd64.tar.gz \
+            --policy git+https://github.com/TomHennen/wrangle@v0.4.2#policies/wrangle-vsa-consumer-v1.hjson \
+            --collector github:TomHennen/wrangle-test \
+            --context expectedResourceUri:pkg:golang/github.com/tomhennen/wrangle-test/go@v0.4.0 \
+            --context sourceRepo:https://github.com/TomHennen/wrangle-test; echo "exit=$?"
+          echo "== github: collector with NO token"
+          GITHUB_TOKEN= GH_TOKEN= ampel verify --subject wrangle-test-fixture-go_0.4.0_linux_amd64.tar.gz \
+            --policy git+https://github.com/TomHennen/wrangle@v0.4.2#policies/wrangle-vsa-consumer-v1.hjson \
+            --collector github:TomHennen/wrangle-test \
+            --context expectedResourceUri:pkg:golang/github.com/tomhennen/wrangle-test/go@v0.4.0 \
+            --context sourceRepo:https://github.com/TomHennen/wrangle-test; echo "exit=$?"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
