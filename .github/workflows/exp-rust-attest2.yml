@@ -1,0 +1,30 @@
+name: exp-rust-attest2
+on:
+  push:
+    branches: [exp/rust-attest]
+permissions:
+  contents: read
+jobs:
+  more:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      attestations: read
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          B=https://api.github.com/repos/TomHennen/wrangle-test/attestations
+          for p in provenance sbom release https://slsa.dev/provenance/v1 https%3A%2F%2Fslsa.dev%2Fverification_summary%2Fv1 https://spdx.dev/Document; do
+            rust-exp/attest/fetch.sh "p" "$B/sha256:$D?predicate_type=$p" "$GH_TOKEN" 2>&1 | sed -n '1p;$p' | sed "s|^|[$p] |"
+          done
+          rust-exp/attest/fetch.sh full "$B/sha256:$D" "$GH_TOKEN" >/dev/null
+          echo "response bytes: $(wc -c < /tmp/body.full)"
+          echo "link header:"; grep -i '^link' /tmp/hdr.full || echo none
+          rust-exp/attest/fetch.sh pp "$B/sha256:$D?per_page=2" "$GH_TOKEN" >/dev/null; grep -i '^link' /tmp/hdr.pp || echo "no link on per_page=2"
+          echo "latency for 20 sequential calls:"; time (for i in $(seq 20); do curl -s -o /dev/null -H "Authorization: Bearer $GH_TOKEN" "$B/sha256:$D"; done)
+          echo "-- gh attestation verify, verbose"
+          gh release download v0.4.0 -R TomHennen/wrangle-test -p '*.tar.gz'
+          GH_DEBUG=api gh attestation verify --repo TomHennen/wrangle-test *.tar.gz 2>&1 | grep -vE "^(<|>)|^\*" | grep -iE "error|fail|verif|issuer|GET|HTTP|loaded|attest" | cut -c1-250 | head -25
+        env:
+          D: 2120bc91ec714638982e32d04e23a8a0063da93fc49bd9647c5c0fb07a75423c
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
